@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, jsonify
 import json
 import os
 import traceback
@@ -73,9 +73,20 @@ def index():
         return render_template('index.html', error_message=error_message)
 
     if request.method == 'POST':
-        text_input = request.form.get('text_input')
-        question_input = request.form.get('question_input')
-        student_answer_input = request.form.get('student_answer_input')
+        if request.is_json:
+            data = request.get_json()
+            if not data:
+                error_message = "Invalid JSON or empty request body."
+                return render_template('index.html', error_message=error_message)
+
+            text_input = data.get('text_input')
+            question_input = data.get('question_input')
+            student_answer_input = data.get('student_answer_input')
+        else:
+            # Fallback for form data if not JSON
+            text_input = request.form.get('text_input')
+            question_input = request.form.get('question_input')
+            student_answer_input = request.form.get('student_answer_input')
 
         if not all([text_input, question_input, student_answer_input]):
             error_message = "Tous les champs de saisie sont obligatoires."
@@ -108,10 +119,11 @@ def index():
                     "timestamp": datetime.utcnow() # Ajouter un horodatage
                 }
 
-                # Sauvegarder dans MongoDB
+                inserted_id = None
                 if client:
                     try:
-                        evaluations_collection.insert_one(data_to_save)
+                        result = evaluations_collection.insert_one(data_to_save)
+                        inserted_id = str(result.inserted_id) # Convert ObjectId to string
                         print("Données sauvegardées avec succès dans MongoDB.")
                     except PyMongoError as mongo_e:
                         print(f"Erreur lors de la sauvegarde des données dans MongoDB : {mongo_e}")
@@ -121,6 +133,17 @@ def index():
                     error_message = "Base de données non connectée. Résultats non sauvegardés."
             else:
                 print("Le flux de travail n'a pas produit de résultat final. Vérifiez les données des étapes pour les erreurs.")
+                # If workflow didn't produce a final result, ensure final_score and feedback are null
+                final_score = None
+                feedback = ""
+                data_to_save = { # Re-initialize data_to_save for consistent response
+                    "text": text_input,
+                    "question": question_input,
+                    "student_answer": student_answer_input,
+                    "final_score": final_score,
+                    "feedback": feedback,
+                    "timestamp": datetime.utcnow()
+                }
             # print("Steps Data:", json.dumps(steps_data, indent=2, ensure_ascii=False))
 
 
@@ -130,15 +153,39 @@ def index():
             error_message = f"Une erreur inattendue est survenue : {str(e)}"
             # Optionally, you can pass steps_data if it was partially populated
             # steps_data.append({"name": "Flask App Error", "status": "Failure", "error_message_detail": str(e)})
+            # Ensure response data is consistent even on error
+            final_score = None
+            feedback = ""
+            data_to_save = {
+                "text": text_input,
+                "question": question_input,
+                "student_answer": student_answer_input,
+                "final_score": final_score,
+                "feedback": feedback,
+                "timestamp": datetime.utcnow()
+            }
+            inserted_id = None # No ID on error
 
-        return render_template('index.html',
-                               final_result=final_result,
-                               steps_data=steps_data,
-                               error_message=error_message,
-                               # Pass back the inputs to repopulate the form
-                               text_input=text_input,
-                               question_input=question_input,
-                               student_answer_input=student_answer_input)
+        if request.is_json:
+            response_data = {
+                "_id": inserted_id,
+                "text": data_to_save.get("text"),
+                "question": data_to_save.get("question"),
+                "student_answer": data_to_save.get("student_answer"),
+                "final_score": data_to_save.get("final_score"),
+                "feedback": data_to_save.get("feedback"),
+                "timestamp": data_to_save.get("timestamp").isoformat() if data_to_save.get("timestamp") else None
+            }
+            return jsonify(response_data)
+        else:
+            return render_template('index.html',
+                                   final_result=final_result,
+                                   steps_data=steps_data,
+                                   error_message=error_message,
+                                   # Pass back the inputs to repopulate the form
+                                   text_input=text_input,
+                                   question_input=question_input,
+                                   student_answer_input=student_answer_input)
     else: # GET request
         # Populate form with default values for GET request
         return render_template('index.html',
