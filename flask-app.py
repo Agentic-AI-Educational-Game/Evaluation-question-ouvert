@@ -57,7 +57,7 @@ DEFAULT_QUESTION = "Que fait la maîtresse ?"
 DEFAULT_ANSWER = "La maîtresse explique la leçon de mathématiques, écrit des chiffres au tableau, montre comment faire des additions et résoudre des problèmes, et aide les élèves quand ils ont du mal."
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/evaluate_answer', methods=['GET', 'POST'])
 def index():
     final_result = None
     steps_data = []
