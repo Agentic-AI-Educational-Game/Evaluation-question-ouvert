@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flux de travail d'évaluation</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #333; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        textarea, input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            background-color: #5cb85c;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        input[type="submit"]:hover { background-color: #4cae4c; }
+        .results { margin-top: 30px; }
+        .step {
+            border: 1px solid #eee;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .step h3 { margin-top: 0; }
+        .step-status-Success { border-left: 5px solid green; }
+        .step-status-Failure { border-left: 5px solid red; }
+        pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap; /* Allows wrapping */
+            word-wrap: break-word; /* Breaks long words */
+        }
+        .error { color: red; font-weight: bold; }
+        .log-entry { font-family: monospace; font-size: 0.9em; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Évaluation des réponses des étudiants</h1>
+        <form method="POST">
+            <div>
+                <label for="text_input">Texte du contexte :</label>
+                <textarea id="text_input" name="text_input" rows="8" required>{{ request.form['text_input'] }}</textarea>
+            </div>
+            <div>
+                <label for="question_input">Question :</label>
+                <textarea id="question_input" name="question_input" rows="3" required>{{ request.form['question_input'] }}</textarea>
+            </div>
+            <div>
+                <label for="student_answer_input">Réponse de l'étudiant :</label>
+                <textarea id="student_answer_input" name="student_answer_input" rows="5" required>{{ request.form['student_answer_input'] }}</textarea>
+            </div>
+            <input type="submit" value="Évaluer">
+        </form>
+
+        {% if final_result or steps_data %}
+        <div class="results">
+            <h2>Résultats du flux de travail</h2>
+
+            {% if final_result %}
+                <div class="step step-status-Success">
+                    <h3>Résultat de l'évaluation finale :</h3>
+                    <pre>{{ final_result | tojson(indent=4) }}</pre>
+                </div>
+            {% elif steps_data and steps_data[-1].status == "Failure" %}
+                 <div class="step step-status-Failure">
+                    <h3>Échec du flux de travail</h3>
+                    <p>Le flux de travail n'a pas pu être terminé. Voir la dernière étape pour plus de détails.</p>
+                </div>
+            {% endif %}
+
+            <h2>Étapes détaillées du flux de travail :</h2>
+            {% for step in steps_data %}
+            <div class="step step-status-{{ step.status }}">
+                <h3>{{ step.name }} <small>(Statut : {{ step.status }})</small></h3>
+                
+                <h4>Entrées :</h4>
+                {% if step.inputs %}
+                    <pre>{{ step.inputs | tojson(indent=2) }}</pre>
+                {% else %}
+                    <p>N/A</p>
+                {% endif %}
+
+                <h4>Journaux des tentatives :</h4>
+                {% if step.attempts_logs %}
+                    <ul>
+                    {% for log in step.attempts_logs %}
+                        <li class="log-entry">{{ log }}</li>
+                    {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Aucun journal de tentative enregistré.</p>
+                {% endif %}
+
+                {% if step.raw_output %}
+                    <h4>Sortie brute (dernière tentative) :</h4>
+                    <pre>{{ step.raw_output }}</pre>
+                {% endif %}
+                
+                {% if step.status == "Success" and step.parsed_output %}
+                    <h4>Sortie analysée :</h4>
+                    <pre>{{ step.parsed_output | tojson(indent=2) }}</pre>
+                {% endif %}
+
+                {% if step.error_message_detail %}
+                    <h4>Détail de l'erreur :</h4>
+                    <p class="error">{{ step.error_message_detail }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if error_message %}
+            <div class="results">
+                <h2 class="error">Une erreur est survenue lors de l'exécution du flux de travail</h2>
+                <p class="error">{{ error_message }}</p>
+            </div>
+        {% endif %}
+
+    </div>
+</body>
+</html>
