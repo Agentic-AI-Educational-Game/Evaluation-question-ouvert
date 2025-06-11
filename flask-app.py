@@ -6,6 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, PyMongoError
+from flask_cors import CORS
 
 # Load environment variables from .env file
 load_dotenv()
@@ -198,4 +199,6 @@ def index():
 if __name__ == '__main__':
     if not os.getenv("GROQ_API_KEY"):
         print("AVERTISSEMENT : La variable d'environnement GROQ_API_KEY n'est pas définie. Les stubs pourraient fonctionner, mais les agents réels pourraient échouer.")
-    app.run(debug=True)
+    
+    CORS(app)
+    app.run(host='0.0.0.0', port=5000, debug=True)
